@@ -7,7 +7,7 @@ load_dotenv()
 
 class Config:
     # Flask App Secret Key
-    SECRET_KEY = os.getenv('SECRET_KEY', 'a-very-secret-key')
+    SECRET_KEY = 'your_secret_key_here'
 
     # SQLAlchemy Database URI
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///quiz_master.db')

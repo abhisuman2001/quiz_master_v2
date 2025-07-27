@@ -37,16 +37,47 @@
 
 <script setup>
 import { ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
+import { jwtDecode } from 'jwt-decode';
+import api from '../services/api';
+
+const router = useRouter();
 
 const email = ref('');
 const password = ref('');
 
-const handleLogin = () => {
-  console.log('Login attempt with:', {
-    email: email.value,
-    password: password.value,
-  });
+const handleLogin = async () => {
+  try {
+    const response = await api.post('/login', {
+      email: email.value,
+      password: password.value,
+    });
+
+    const { access_token } = response.data;
+    localStorage.setItem('accessToken', access_token);
+
+    const userData = jwtDecode(access_token);
+    
+    // --- THIS IS THE FIX ---
+    // Change 'userData.identity.role' to 'userData.sub.role'
+    const userRole = userData.sub.role;
+
+    alert('Login successful!');
+
+    if (userRole === 'admin') {
+      router.push('/admin/dashboard');
+    } else {
+      router.push('/dashboard');
+    }
+
+  } catch (error) {
+    if (error.response && error.response.status === 401) {
+      alert('Login failed: Invalid email or password.');
+    } else {
+      alert('An error occurred during login.');
+      console.error(error);
+    }
+  }
 };
 </script>
 

@@ -1,6 +1,6 @@
 <template>
   <div class="container-fluid p-4">
-    <h1 class="text-white mb-4">Dashboard</h1>
+    <h2 class="text-white mb-4">Welcome, {{ adminName }}!</h2>
     
     <div class="row">
       <div class="col-md-4 mb-4">
@@ -22,30 +22,34 @@
         </div>
       </div>
     </div>
-    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-// This component will fetch dashboard-specific stats in the future.
-// For now, we'll keep the numbers static but define them in the script.
+import api from '@/services/api';
 
+// 2. STATE VARIABLE FOR THE ADMIN'S NAME
+const adminName = ref('');
 const totalSubjects = ref(0);
 const totalQuizzes = ref(0);
 const totalUsers = ref(0);
 
-// onMounted(() => {
-//   // In the future, you would make API calls here to get the real numbers
-//   // e.g., api.get('/admin/stats').then(res => { ... });
-//   totalSubjects.value = 12;
-//   totalQuizzes.value = 56;
-//   totalUsers.value = 128;
-// });
-
-// For now, we'll just set them directly.
-totalSubjects.value = 12;
-totalQuizzes.value = 56;
-totalUsers.value = 128;
+onMounted(async () => {
+  try {
+    const response = await api.get('/admin/stats');
+    const stats = response.data;
+    
+    // 3. UPDATE THE STATE WITH THE NAME FROM THE API
+    adminName.value = stats.admin_name;
+    totalSubjects.value = stats.total_subjects;
+    totalQuizzes.value = stats.total_quizzes;
+    totalUsers.value = stats.total_users;
+  } catch (error) {
+    console.error("Failed to fetch admin stats:", error);
+    alert("Could not load dashboard statistics.");
+  }
+});
 </script>
 
 <style scoped>

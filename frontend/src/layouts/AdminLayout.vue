@@ -26,6 +26,11 @@
       <i class="bi bi-patch-question-fill me-2"></i> Quizzes
     </router-link>
   </li>
+  <li class="nav-item">
+    <router-link to="/admin/users" class="nav-link">
+      <i class="bi bi-people-fill me-2"></i> Users
+    </router-link>
+  </li>
 </ul>
       <div class="sidebar-footer">
         <button @click="handleLogout" class="btn btn-danger w-100">

@@ -16,6 +16,13 @@ const routes = [
       { path: 'subjects', name: 'SubjectManagement', component: () => import('../views/admin/SubjectManagement.vue') },
       { path: 'chapters', name: 'ChapterManagement', component: () => import('../views/admin/ChapterManagement.vue') },
       { path: 'quizzes', name: 'QuizManagement', component: () => import('../views/admin/QuizManagement.vue') },
+
+      {
+        path: 'users',
+        name: 'UserManagement',
+        component: () => import('../views/admin/UserManagement.vue')
+      },
+
       {
         path: 'quizzes/:quiz_id/questions',
         name: 'QuestionManagement',

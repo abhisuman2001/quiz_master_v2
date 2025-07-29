@@ -52,6 +52,26 @@ def login():
         return jsonify(access_token=access_token)
     return jsonify({"msg": "Bad username or password"}), 401
 
+@app.route('/api/admin/stats', methods=['GET'])
+@admin_required
+def get_admin_stats():
+    # Fetch the admin's name
+    admin_user_id = get_jwt_identity()
+    admin = User.query.get(admin_user_id)
+    admin_name = admin.full_name if admin else "Admin"
+
+    # Calculate the counts
+    total_subjects = Subject.query.count()
+    total_quizzes = Quiz.query.count()
+    total_users = User.query.filter(User.role != 'admin').count()
+    
+    return jsonify({
+        "admin_name": admin_name,
+        "total_subjects": total_subjects,
+        "total_quizzes": total_quizzes,
+        "total_users": total_users
+    })
+
 # --- Subject Management APIs ---
 @app.route('/api/subjects', methods=['GET'])
 @admin_required
@@ -225,6 +245,46 @@ def delete_question(question_id):
     db.session.delete(question)
     db.session.commit()
     return jsonify({"msg": "Question deleted successfully"})
+
+# --- User Management APIs (for Admin) ---
+
+@app.route('/api/users', methods=['GET'])
+@admin_required
+def get_all_users():
+    # Fetch all users except the admin to prevent self-modification
+    users = User.query.filter(User.role != 'admin').order_by(User.full_name).all()
+    return jsonify([{
+        'id': u.id,
+        'full_name': u.full_name,
+        'username': u.username, # email
+        'qualification': u.qualification,
+        'role': u.role
+    } for u in users])
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    # Fields an admin is allowed to change
+    user.full_name = data.get('full_name', user.full_name)
+    user.qualification = data.get('qualification', user.qualification)
+    user.role = data.get('role', user.role) # e.g., promote a user to admin
+    
+    db.session.commit()
+    return jsonify({'id': user.id, 'full_name': user.full_name, 'role': user.role})
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.role == 'admin':
+        return jsonify({"msg": "Cannot delete an admin account."}), 403
+    
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"msg": "User deleted successfully"})
 
 # --- User Dashboard APIs ---
 @app.route('/api/user/profile', methods=['GET'])

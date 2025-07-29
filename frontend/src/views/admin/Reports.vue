@@ -15,7 +15,9 @@
         <p class="mb-1"><strong>Status:</strong> {{ taskStatus }}</p>
         <div v-if="downloadFile">
           <p class="mb-0">Your report is ready!</p>
-          <a :href="downloadUrl" class="alert-link">Click here to download: {{ downloadFile }}</a>
+          <button class="btn btn-success btn-sm mt-2" @click="downloadReportFile(downloadFile)">
+            Click here to download: {{ downloadFile }}
+          </button>
         </div>
       </div>
     </div>
@@ -36,11 +38,11 @@ const triggerReport = async () => {
   isLoading.value = true;
   taskStatus.value = 'PENDING';
   downloadFile.value = null;
-  
+  if (pollingInterval) clearInterval(pollingInterval);
+
   try {
     const response = await api.post('/admin/reports/user-performance');
     taskId.value = response.data.task_id;
-    // Start polling for the status
     pollingInterval = setInterval(checkStatus, 3000);
   } catch (error) {
     console.error("Failed to trigger report:", error);
@@ -68,15 +70,32 @@ const checkStatus = async () => {
   }
 };
 
+// --- THIS IS THE NEW DOWNLOAD FUNCTION ---
+const downloadReportFile = async (filename) => {
+  try {
+    const response = await api.get(`/admin/reports/download/${filename}`, {
+      responseType: 'blob', // Important: tells axios to expect file data
+    });
+
+    // Create a URL for the file data
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename); // Set the filename for the download
+    document.body.appendChild(link);
+    link.click(); // Programmatically click the link to trigger the download
+    document.body.removeChild(link); // Clean up
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Download failed:', error);
+    alert('Could not download the file.');
+  }
+};
+
 const statusClass = computed(() => {
   if (taskStatus.value === 'SUCCESS') return 'alert-success';
   if (taskStatus.value === 'FAILURE') return 'alert-danger';
   return 'alert-info';
-});
-
-const downloadUrl = computed(() => {
-  // Use the full URL for the download link
-  return `http://127.0.0.1:5000/api/admin/reports/download/${downloadFile.value}`;
 });
 </script>
 

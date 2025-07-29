@@ -4,19 +4,19 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from functools import wraps
 from models import db, User, Quiz, Score, Subject, Chapter, Question
 from config import Config
-from tasks import celery # <-- ADD THIS IMPORT
+from tasks import celery, generate_user_performance_report
 from flask import send_from_directory
-from tasks import generate_user_performance_report
+from app_factory import create_app
 
 # --- App Initialization ---
-app = Flask(__name__)
-app.config.from_object(Config)
-celery.conf.update(app.config) # <-- ADD THIS LINE
+app = create_app()
 
-# --- Extensions Initialization ---
-db.init_app(app)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
-jwt = JWTManager(app)
+
+# --- THIS IS THE FIX: Explicitly configure Celery ---
+celery.conf.broker_url = app.config['CELERY_BROKER_URL']
+celery.conf.result_backend = app.config['CELERY_RESULT_BACKEND']
+
+# ---------------------------------------------------
 
 # --- Custom Decorators ---
 def admin_required(fn):

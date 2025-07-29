@@ -1,22 +1,26 @@
-import csv
-import os
-from datetime import datetime
-from celery import Celery
-from celery.schedules import crontab
 
-# Explicitly configure Celery to use Redis for both broker and backend
+
+import sys
+import os
+# --- THIS IS THE FIX ---
+# Add the current directory to the Python path so Celery can find other files
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# ----------------------
+
+from celery import Celery
+import csv
+from datetime import datetime
+from models import User, Score
+
 celery = Celery('tasks',
                 broker='redis://localhost:6379/0',
                 backend='redis://localhost:6379/0')
 
-# This imports the User and Score models only when the task is executed
-from models import User, Score
-
 @celery.task
 def generate_user_performance_report():
-    """A background task to generate a CSV report of user performance."""
-    # This task needs access to the app's context to use the database
-    from app import app
+    from app_factory import create_app
+    app = create_app()
+    
     with app.app_context():
         users = User.query.filter(User.role != 'admin').all()
         
@@ -24,10 +28,7 @@ def generate_user_performance_report():
         for user in users:
             scores = user.scores
             quizzes_taken = len(scores)
-            if quizzes_taken > 0:
-                average_score = sum(s.total_scored for s in scores) / quizzes_taken
-            else:
-                average_score = 0
+            average_score = sum(s.total_scored for s in scores) / quizzes_taken if quizzes_taken > 0 else 0
             
             report_data.append({
                 'user_id': user.id,
@@ -53,7 +54,8 @@ def generate_user_performance_report():
             writer.writerows(report_data)
             
         return filename
-        
+
+
 
 # --- Placeholder tasks for future features ---
 @celery.task

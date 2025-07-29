@@ -31,6 +31,12 @@
       <i class="bi bi-people-fill me-2"></i> Users
     </router-link>
   </li>
+
+  <li class="nav-item">
+  <router-link to="/admin/reports" class="nav-link">
+    <i class="bi bi-file-earmark-bar-graph-fill me-2"></i> Reports
+  </router-link>
+</li>
 </ul>
       <div class="sidebar-footer">
         <button @click="handleLogout" class="btn btn-danger w-100">

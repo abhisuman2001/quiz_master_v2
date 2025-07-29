@@ -1,18 +1,70 @@
-# backend/tasks.py
+import csv
+import os
+from datetime import datetime
 from celery import Celery
 from celery.schedules import crontab
-import smtplib
-from jinja2 import Template
-# ... other imports
 
-def make_celery(app):
-    celery = Celery(app.import_name, backend=app.config['CELERY_RESULT_BACKEND'],
-                    broker=app.config['CELERY_BROKER_URL'])
-    celery.conf.update(app.config)
-    return celery
+# Explicitly configure Celery to use Redis for both broker and backend
+celery = Celery('tasks',
+                broker='redis://localhost:6379/0',
+                backend='redis://localhost:6379/0')
 
-# Assume celery is initialized in app.py
-from app import celery
+# This imports the User and Score models only when the task is executed
+from models import User, Score
+
+@celery.task
+def generate_user_performance_report():
+    """A background task to generate a CSV report of user performance."""
+    # This task needs access to the app's context to use the database
+    from app import app
+    with app.app_context():
+        users = User.query.filter(User.role != 'admin').all()
+        
+        report_data = []
+        for user in users:
+            scores = user.scores
+            quizzes_taken = len(scores)
+            if quizzes_taken > 0:
+                average_score = sum(s.total_scored for s in scores) / quizzes_taken
+            else:
+                average_score = 0
+            
+            report_data.append({
+                'user_id': user.id,
+                'full_name': user.full_name,
+                'email': user.username,
+                'quizzes_taken': quizzes_taken,
+                'average_score': round(average_score, 2)
+            })
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"user_performance_{timestamp}.csv"
+        
+        exports_dir = 'exports'
+        if not os.path.exists(exports_dir):
+            os.makedirs(exports_dir)
+            
+        filepath = os.path.join(exports_dir, filename)
+        
+        with open(filepath, 'w', newline='') as csvfile:
+            fieldnames = ['user_id', 'full_name', 'email', 'quizzes_taken', 'average_score']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(report_data)
+            
+        return filename
+        
+
+# --- Placeholder tasks for future features ---
+@celery.task
+def daily_reminder():
+    print("Sending daily reminders...")
+    return "Daily reminders sent."
+
+@celery.task
+def monthly_activity_report():
+    print("Generating and sending monthly reports...")
+    return "Monthly reports sent."
 
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
@@ -26,27 +78,3 @@ def setup_periodic_tasks(sender, **kwargs):
         crontab(day_of_month=1, hour=8, minute=0),
         monthly_activity_report.s(),
     )
-
-@celery.task
-def daily_reminder():
-    # Logic to find users who haven't visited and send a reminder
-    # (e.g., via email or Google Chat webhook)
-    print("Sending daily reminders...")
-    return "Daily reminders sent."
-
-@celery.task
-def monthly_activity_report():
-    # Logic to generate and email a report for each user
-    print("Generating and sending monthly reports...")
-    return "Monthly reports sent."
-
-@celery.task
-def export_user_quizzes_csv(user_id):
-    # Logic to query scores for a user, generate a CSV file,
-    # and maybe email it to them or provide a download link.
-    print(f"Generating CSV for user {user_id}...")
-    # Simulate work
-    import time
-    time.sleep(10)
-    print(f"CSV for user {user_id} is ready.")
-    return f"Export for user {user_id} complete."

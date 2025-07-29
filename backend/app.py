@@ -2,12 +2,16 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from functools import wraps
-from models import db, User, Quiz, Score, Subject, Chapter, Question # Import Question model
+from models import db, User, Quiz, Score, Subject, Chapter, Question
 from config import Config
+from tasks import celery # <-- ADD THIS IMPORT
+from flask import send_from_directory
+from tasks import generate_user_performance_report
 
 # --- App Initialization ---
 app = Flask(__name__)
 app.config.from_object(Config)
+celery.conf.update(app.config) # <-- ADD THIS LINE
 
 # --- Extensions Initialization ---
 db.init_app(app)
@@ -286,6 +290,29 @@ def delete_user(user_id):
     db.session.commit()
     return jsonify({"msg": "User deleted successfully"})
 
+
+# --- Report Generation API ---
+@app.route('/api/admin/reports/user-performance', methods=['POST'])
+@admin_required
+def trigger_user_report():
+    task = generate_user_performance_report.delay()
+    return jsonify({"task_id": task.id}), 202 # 202 Accepted
+
+@app.route('/api/admin/reports/status/<task_id>', methods=['GET'])
+@admin_required
+def get_report_status(task_id):
+    task = celery.AsyncResult(task_id)
+    response = {
+        'state': task.state,
+        'result': task.result if task.state == 'SUCCESS' else None
+    }
+    return jsonify(response)
+
+@app.route('/api/admin/reports/download/<filename>', methods=['GET'])
+@admin_required
+def download_report(filename):
+    return send_from_directory('exports', filename, as_attachment=True)
+
 # --- User Dashboard APIs ---
 @app.route('/api/user/profile', methods=['GET'])
 @jwt_required()
@@ -306,6 +333,65 @@ def get_user_scores():
     user_id = get_jwt_identity()
     scores = Score.query.filter_by(user_id=user_id).all()
     return jsonify([{"id": s.id, "quizName": f"Quiz #{s.quiz_id}", "score": s.total_scored, "date": s.time_stamp.strftime('%Y-%m-%d')} for s in scores])
+
+# --- Quiz Taking APIs ---
+
+@app.route('/api/quizzes/<int:quiz_id>/attempt', methods=['GET'])
+@jwt_required()
+def get_quiz_for_attempt(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    questions = quiz.questions
+    
+    # Return questions without the correct answer
+    question_list = [{
+        'id': q.id,
+        'statement': q.statement,
+        'option1': q.option1,
+        'option2': q.option2,
+        'option3': q.option3,
+        'option4': q.option4
+    } for q in questions]
+    
+    return jsonify({
+        'quiz_id': quiz.id,
+        'time_duration': quiz.time_duration,
+        'questions': question_list
+    })
+
+@app.route('/api/quizzes/<int:quiz_id>/submit', methods=['POST'])
+@jwt_required()
+def submit_quiz_attempt(quiz_id):
+    data = request.get_json()
+    user_answers = data.get('answers') # e.g., {"question_id": "selected_option_num"}
+    user_id = get_jwt_identity()
+    
+    quiz = Quiz.query.get_or_404(quiz_id)
+    questions = quiz.questions
+    
+    score = 0
+    total_questions = len(questions)
+    
+    # Calculate score
+    for question in questions:
+        # User answers are sent as strings, so convert question.id to string for lookup
+        user_answer = user_answers.get(str(question.id))
+        if user_answer and int(user_answer) == question.correct_option:
+            score += 1
+            
+    # Save the score to the database
+    new_score = Score(
+        quiz_id=quiz_id,
+        user_id=user_id,
+        total_scored=score
+    )
+    db.session.add(new_score)
+    db.session.commit()
+    
+    return jsonify({
+        'msg': 'Quiz submitted successfully!',
+        'score': score,
+        'total': total_questions
+    })
 
 # --- App Runner ---
 if __name__ == '__main__':

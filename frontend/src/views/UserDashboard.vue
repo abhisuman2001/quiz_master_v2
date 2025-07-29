@@ -21,7 +21,7 @@
                   <h6 class="mb-1">{{ quiz.title }}</h6>
                   <small class="text-muted">{{ quiz.description }}</small>
                 </div>
-                <button class="btn btn-primary btn-sm">Start Quiz</button>
+                <router-link :to="`/quiz/${quiz.id}`" class="btn btn-primary btn-sm">Start Quiz</router-link>
               </li>
             </ul>
           </div>
@@ -42,7 +42,7 @@
               <tbody>
                 <tr v-for="score in pastScores" :key="score.id">
                   <td>{{ score.quizName }}</td>
-                  <td>{{ score.score }}%</td>
+                  <td>{{ score.score }}</td>
                   <td>{{ score.date }}</td>
                 </tr>
               </tbody>
@@ -61,38 +61,29 @@ import api from '../services/api';
 
 const router = useRouter();
 
-// --- Logout Function ---
+const userName = ref('');
+const availableQuizzes = ref([]);
+const pastScores = ref([]);
+
 const handleLogout = () => {
   localStorage.removeItem('accessToken');
   router.push('/login');
 };
 
-// Initialize state with empty values
-const userName = ref('');
-const availableQuizzes = ref([]);
-const pastScores = ref([]);
-
-// Fetch data when the component is first created
 onMounted(async () => {
   try {
-    // Use Promise.all to fetch all data concurrently
     const [profileRes, quizzesRes, scoresRes] = await Promise.all([
       api.get('/user/profile'),
       api.get('/quizzes'),
       api.get('/user/scores'),
     ]);
 
-    // Update the state with data from the backend
     userName.value = profileRes.data.fullName;
     availableQuizzes.value = quizzesRes.data;
     pastScores.value = scoresRes.data;
 
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
-    // You could redirect to login if auth fails (e.g., token expired)
-    // if (error.response && error.response.status === 401) {
-    //   handleLogout();
-    // }
   }
 });
 </script>
@@ -102,32 +93,26 @@ onMounted(async () => {
   min-height: 100vh;
   background: linear-gradient(45deg, #240046 0%, #5a189a 100%);
 }
-
 .top-nav {
   background: rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(5px);
 }
-
 .main-content {
-  padding-top: 80px; /* Offset for the navbar */
+  padding-top: 80px;
 }
-
 .content-card {
   color: white;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(5px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   height: 100%;
 }
-
 .list-group-item {
   background-color: rgba(255, 255, 255, 0.15);
   border: none;
   color: white;
 }
-
 .btn-primary {
   background-color: #ff4d6d;
   border-color: #ff4d6d;

@@ -1,10 +1,11 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-import router from './router' // 1. Import your router
-import 'bootstrap/dist/css/bootstrap.min.css' // Import Bootstrap CSS
+import router from './router'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap/dist/js/bootstrap.bundle.min.js' // <-- ADD THIS LINE
 
 const app = createApp(App)
 
-app.use(router) // 2. Tell the app to use the router
+app.use(router)
 
 app.mount('#app')

@@ -2,62 +2,54 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from functools import wraps
-from models import db, User, Quiz, Score, Subject, Chapter
+from models import db, User, Quiz, Score, Subject, Chapter, Question # Import Question model
 from config import Config
 
+# --- App Initialization ---
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Initialize extensions
+# --- Extensions Initialization ---
 db.init_app(app)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 jwt = JWTManager(app)
 
-# --- A more robust admin decorator ---
+# --- Custom Decorators ---
 def admin_required(fn):
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
-        current_user = get_jwt_identity()
-        if current_user.get('role') != 'admin':
-            return jsonify(msg="Admins only!"), 403
-        return fn(*args, **kwargs)
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        if user and user.role == 'admin':
+            return fn(*args, **kwargs)
+        return jsonify(msg="Admins only!"), 403
     return wrapper
 
 # --- Auth APIs ---
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-    full_name = data.get('fullName')
-    
-    if User.query.filter_by(username=email).first():
+    if User.query.filter_by(username=data.get('email')).first():
         return jsonify({"msg": "User with this email already exists"}), 409
-
+    
     new_user = User(
-        username=email,
-        full_name=full_name,
+        username=data.get('email'), 
+        full_name=data.get('fullName'), 
         qualification=data.get('qualification')
     )
-    new_user.set_password(password)
-    
+    new_user.set_password(data.get('password'))
     db.session.add(new_user)
     db.session.commit()
-    
     return jsonify({"msg": "User registered successfully"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-    user = User.query.filter_by(username=email).first()
-
-    if user and user.check_password(password):
-        access_token = create_access_token(identity={'id': user.id, 'role': user.role})
+    user = User.query.filter_by(username=data.get('email')).first()
+    if user and user.check_password(data.get('password')):
+        access_token = create_access_token(identity=user.id, additional_claims={'role': user.role})
         return jsonify(access_token=access_token)
-    
     return jsonify({"msg": "Bad username or password"}), 401
 
 # --- Subject Management APIs ---
@@ -71,16 +63,11 @@ def get_all_subjects():
 @admin_required
 def create_subject():
     data = request.get_json()
-    if not data or not data.get('name'):
-        return jsonify({"msg": "Missing subject name"}), 400
-    
     if Subject.query.filter_by(name=data['name']).first():
         return jsonify({"msg": "A subject with this name already exists"}), 409
-    
     new_subject = Subject(name=data['name'], description=data.get('description', ''))
     db.session.add(new_subject)
     db.session.commit()
-    
     return jsonify({'id': new_subject.id, 'name': new_subject.name, 'description': new_subject.description}), 201
 
 @app.route('/api/subjects/<int:subject_id>', methods=['PUT'])
@@ -88,11 +75,9 @@ def create_subject():
 def update_subject(subject_id):
     subject = Subject.query.get_or_404(subject_id)
     data = request.get_json()
-    
     subject.name = data.get('name', subject.name)
     subject.description = data.get('description', subject.description)
     db.session.commit()
-    
     return jsonify({'id': subject.id, 'name': subject.name, 'description': subject.description})
 
 @app.route('/api/subjects/<int:subject_id>', methods=['DELETE'])
@@ -103,59 +88,173 @@ def delete_subject(subject_id):
     db.session.commit()
     return jsonify({"msg": "Subject deleted successfully"}), 200
 
+# --- Chapter Management APIs ---
+@app.route('/api/chapters/<int:chapter_id>', methods=['GET'])
+@admin_required
+def get_chapter_details(chapter_id):
+    chapter = Chapter.query.get_or_404(chapter_id)
+    return jsonify({'id': chapter.id, 'name': chapter.name, 'description': chapter.description})
+
+@app.route('/api/subjects/<int:subject_id>/chapters', methods=['GET'])
+@admin_required
+def get_chapters_for_subject(subject_id):
+    subject = Subject.query.get_or_404(subject_id)
+    chapters = [{'id': c.id, 'name': c.name, 'description': c.description} for c in subject.chapters]
+    return jsonify(chapters)
+
+@app.route('/api/subjects/<int:subject_id>/chapters', methods=['POST'])
+@admin_required
+def create_chapter_for_subject(subject_id):
+    subject = Subject.query.get_or_404(subject_id)
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({"msg": "Missing chapter name"}), 400
+    new_chapter = Chapter(name=data['name'], description=data.get('description', ''), subject_id=subject.id)
+    db.session.add(new_chapter)
+    db.session.commit()
+    return jsonify({'id': new_chapter.id, 'name': new_chapter.name, 'description': new_chapter.description}), 201
+
+@app.route('/api/chapters/<int:chapter_id>', methods=['PUT'])
+@admin_required
+def update_chapter(chapter_id):
+    chapter = Chapter.query.get_or_404(chapter_id)
+    data = request.get_json()
+    chapter.name = data.get('name', chapter.name)
+    chapter.description = data.get('description', chapter.description)
+    db.session.commit()
+    return jsonify({'id': chapter.id, 'name': chapter.name, 'description': chapter.description})
+
+@app.route('/api/chapters/<int:chapter_id>', methods=['DELETE'])
+@admin_required
+def delete_chapter(chapter_id):
+    chapter = Chapter.query.get_or_404(chapter_id)
+    db.session.delete(chapter)
+    db.session.commit()
+    return jsonify({"msg": "Chapter deleted successfully"})
+
+# --- Quiz Management APIs ---
+@app.route('/api/chapters/<int:chapter_id>/quizzes', methods=['GET'])
+@admin_required
+def get_quizzes_for_chapter(chapter_id):
+    Chapter.query.get_or_404(chapter_id)
+    quizzes = Quiz.query.filter_by(chapter_id=chapter_id).all()
+    return jsonify([{'id': q.id, 'time_duration': q.time_duration, 'remarks': q.remarks} for q in quizzes])
+
+@app.route('/api/chapters/<int:chapter_id>/quizzes', methods=['POST'])
+@admin_required
+def create_quiz_for_chapter(chapter_id):
+    Chapter.query.get_or_404(chapter_id)
+    data = request.get_json()
+    if not data or not data.get('time_duration'):
+        return jsonify({"msg": "Missing time duration"}), 400
+    new_quiz = Quiz(chapter_id=chapter_id, time_duration=data['time_duration'], remarks=data.get('remarks', ''))
+    db.session.add(new_quiz)
+    db.session.commit()
+    return jsonify({'id': new_quiz.id, 'time_duration': new_quiz.time_duration, 'remarks': new_quiz.remarks}), 201
+
+@app.route('/api/quizzes/<int:quiz_id>', methods=['PUT'])
+@admin_required
+def update_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    data = request.get_json()
+    quiz.time_duration = data.get('time_duration', quiz.time_duration)
+    quiz.remarks = data.get('remarks', quiz.remarks)
+    db.session.commit()
+    return jsonify({'id': quiz.id, 'time_duration': quiz.time_duration, 'remarks': quiz.remarks})
+
+@app.route('/api/quizzes/<int:quiz_id>', methods=['DELETE'])
+@admin_required
+def delete_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    db.session.delete(quiz)
+    db.session.commit()
+    return jsonify({"msg": "Quiz deleted successfully"})
+
+# --- Question Management APIs ---
+@app.route('/api/quizzes/<int:quiz_id>/questions', methods=['GET'])
+@admin_required
+def get_questions_for_quiz(quiz_id):
+    Quiz.query.get_or_404(quiz_id)
+    questions = Question.query.filter_by(quiz_id=quiz_id).all()
+    return jsonify([{
+        'id': q.id, 'statement': q.statement, 'option1': q.option1,
+        'option2': q.option2, 'option3': q.option3, 'option4': q.option4,
+        'correct_option': q.correct_option
+    } for q in questions])
+
+@app.route('/api/quizzes/<int:quiz_id>/questions', methods=['POST'])
+@admin_required
+def create_question_for_quiz(quiz_id):
+    Quiz.query.get_or_404(quiz_id)
+    data = request.get_json()
+    required_fields = ['statement', 'option1', 'option2', 'option3', 'option4', 'correct_option']
+    if not all(field in data for field in required_fields):
+        return jsonify({"msg": "Missing required fields for question"}), 400
+
+    new_question = Question(
+        quiz_id=quiz_id,
+        statement=data['statement'],
+        option1=data['option1'],
+        option2=data['option2'],
+        option3=data['option3'],
+        option4=data['option4'],
+        correct_option=data['correct_option']
+    )
+    db.session.add(new_question)
+    db.session.commit()
+    return jsonify({'id': new_question.id}), 201
+
+@app.route('/api/questions/<int:question_id>', methods=['PUT'])
+@admin_required
+def update_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    data = request.get_json()
+    question.statement = data.get('statement', question.statement)
+    question.option1 = data.get('option1', question.option1)
+    question.option2 = data.get('option2', question.option2)
+    question.option3 = data.get('option3', question.option3)
+    question.option4 = data.get('option4', question.option4)
+    question.correct_option = data.get('correct_option', question.correct_option)
+    db.session.commit()
+    return jsonify({'id': question.id})
+
+@app.route('/api/questions/<int:question_id>', methods=['DELETE'])
+@admin_required
+def delete_question(question_id):
+    question = Question.query.get_or_404(question_id)
+    db.session.delete(question)
+    db.session.commit()
+    return jsonify({"msg": "Question deleted successfully"})
+
 # --- User Dashboard APIs ---
 @app.route('/api/user/profile', methods=['GET'])
 @jwt_required()
 def get_user_profile():
-    identity = get_jwt_identity()
-    user_id = identity['id']
+    user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
     return jsonify({"fullName": user.full_name})
 
 @app.route('/api/quizzes', methods=['GET'])
 @jwt_required()
 def get_available_quizzes():
     quizzes = Quiz.query.all()
-    quiz_list = [
-        {
-            "id": quiz.id,
-            "title": f"Quiz for Chapter {quiz.chapter_id}",
-            "description": quiz.remarks or f"Duration: {quiz.time_duration}"
-        } for quiz in quizzes
-    ]
-    return jsonify(quiz_list)
+    return jsonify([{"id": q.id, "title": f"Quiz for Chapter {q.chapter_id}", "description": q.remarks} for q in quizzes])
 
 @app.route('/api/user/scores', methods=['GET'])
 @jwt_required()
 def get_user_scores():
-    identity = get_jwt_identity()
-    user_id = identity['id']
-    scores = Score.query.filter_by(user_id=user_id).order_by(Score.time_stamp.desc()).all()
-    score_list = [
-        {
-            "id": score.id,
-            "quizName": f"Quiz #{score.quiz_id}",
-            "score": score.total_scored,
-            "date": score.time_stamp.strftime('%Y-%m-%d')
-        } for score in scores
-    ]
-    return jsonify(score_list)
+    user_id = get_jwt_identity()
+    scores = Score.query.filter_by(user_id=user_id).all()
+    return jsonify([{"id": s.id, "quizName": f"Quiz #{s.quiz_id}", "score": s.total_scored, "date": s.time_stamp.strftime('%Y-%m-%d')} for s in scores])
 
 # --- App Runner ---
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         if not User.query.filter_by(username=app.config['ADMIN_EMAIL']).first():
-            admin = User(
-                username=app.config['ADMIN_EMAIL'],
-                full_name='Admin',
-                role='admin'
-            )
+            admin = User(username=app.config['ADMIN_EMAIL'], full_name='Admin', role='admin')
             admin.set_password(app.config['ADMIN_PASSWORD'])
             db.session.add(admin)
             db.session.commit()
             print('Initialized the database and created admin user.')
-    
-    app.run(debug=True)
+    app.run(debug=True, use_reloader=False)

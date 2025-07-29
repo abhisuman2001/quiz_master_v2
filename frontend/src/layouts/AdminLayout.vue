@@ -6,17 +6,27 @@
         <span class="text-white-50">Admin Panel</span>
       </div>
       <ul class="nav flex-column">
-        <li class="nav-item">
-          <router-link to="/admin/dashboard" class="nav-link">
-            <i class="bi bi-grid-1x2-fill me-2"></i> Dashboard
-          </router-link>
-        </li>
-        <li class="nav-item">
-          <router-link to="/admin/subjects" class="nav-link">
-            <i class="bi bi-journal-album me-2"></i> Subjects
-          </router-link>
-        </li>
-      </ul>
+  <li class="nav-item">
+    <router-link to="/admin/dashboard" class="nav-link">
+      <i class="bi bi-grid-1x2-fill me-2"></i> Dashboard
+    </router-link>
+  </li>
+  <li class="nav-item">
+    <router-link to="/admin/subjects" class="nav-link">
+      <i class="bi bi-journal-album me-2"></i> Subjects
+    </router-link>
+  </li>
+  <li class="nav-item">
+    <router-link to="/admin/chapters" class="nav-link">
+      <i class="bi bi-collection-fill me-2"></i> Chapters
+    </router-link>
+  </li>
+  <li class="nav-item">
+    <router-link to="/admin/quizzes" class="nav-link">
+      <i class="bi bi-patch-question-fill me-2"></i> Quizzes
+    </router-link>
+  </li>
+</ul>
       <div class="sidebar-footer">
         <button @click="handleLogout" class="btn btn-danger w-100">
           <i class="bi bi-box-arrow-left me-2"></i> Logout

@@ -11,14 +11,14 @@
           <tr>
             <th>Name</th>
             <th>Description</th>
-            <th>Actions</th>
+            <th class="actions-cell">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="subject in subjects" :key="subject.id">
             <td>{{ subject.name }}</td>
             <td>{{ subject.description }}</td>
-            <td>
+            <td class="actions-cell">
               <button class="btn btn-sm btn-info me-2" @click="openEditModal(subject)">Edit</button>
               <button class="btn btn-sm btn-danger" @click="deleteSubject(subject.id)">Delete</button>
             </td>
@@ -59,7 +59,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../../services/api';
-import { Modal } from 'bootstrap'; // Import Bootstrap's Modal component
+import { Modal } from 'bootstrap';
 
 let subjectModal = null;
 
@@ -92,7 +92,7 @@ const createSubject = async () => {
   try {
     await api.post('/subjects', currentSubject.value);
     subjectModal.hide();
-    fetchSubjects(); // Refresh list
+    fetchSubjects();
   } catch (error) {
     console.error("Failed to create subject:", error);
     alert("Error creating subject.");
@@ -101,7 +101,7 @@ const createSubject = async () => {
 
 const openEditModal = (subject) => {
   isEditMode.value = true;
-  currentSubject.value = { ...subject }; // Create a copy to edit
+  currentSubject.value = { ...subject };
   subjectModal.show();
 };
 
@@ -109,7 +109,7 @@ const updateSubject = async () => {
   try {
     await api.put(`/subjects/${currentSubject.value.id}`, currentSubject.value);
     subjectModal.hide();
-    fetchSubjects(); // Refresh list
+    fetchSubjects();
   } catch (error) {
     console.error("Failed to update subject:", error);
     alert("Error updating subject.");
@@ -120,7 +120,7 @@ const deleteSubject = async (id) => {
   if (!confirm("Are you sure you want to delete this subject?")) return;
   try {
     await api.delete(`/subjects/${id}`);
-    fetchSubjects(); // Refresh list
+    fetchSubjects();
   } catch (error) {
     console.error("Failed to delete subject:", error);
     alert("Error deleting subject.");
@@ -147,5 +147,9 @@ const deleteSubject = async (id) => {
   background-color: rgba(255,255,255,0.2);
   border-color: #ff4d6d;
   box-shadow: none;
+}
+.actions-cell {
+  width: 150px; /* Make the column narrower */
+  text-align: right;
 }
 </style>

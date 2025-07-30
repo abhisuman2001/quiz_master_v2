@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { jwtDecode } from 'jwt-decode';
+import jwtDecode from 'jwt-decode';
 import HomePage from '../views/HomePage.vue'
 import AdminLayout from '../layouts/AdminLayout.vue'
 

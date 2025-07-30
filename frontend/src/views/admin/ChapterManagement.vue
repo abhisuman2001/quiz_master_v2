@@ -3,7 +3,7 @@
     <h1 class="text-white mb-4">Manage Chapters</h1>
 
     <div class="mb-4">
-      <label for="subjectSelect" class="form-label text-white-50">Select a Subject to Manage its Chapters</label>
+      <label for="subjectSelect" class="form-label text-white-50">1. Select a Subject to Manage its Chapters</label>
       <select class="form-select form-select-lg bg-dark text-white" id="subjectSelect" v-model="selectedSubjectId">
         <option :value="null" disabled>-- Please choose a subject --</option>
         <option v-for="subject in allSubjects" :key="subject.id" :value="subject.id">
@@ -17,6 +17,15 @@
         <h3 class="text-white">Chapters for: {{ selectedSubjectName }}</h3>
         <button class="btn btn-primary" @click="openCreateModal">Create New Chapter</button>
       </div>
+      
+      <div class="mb-4">
+        <input 
+          type="search" 
+          class="form-control form-control-lg bg-dark text-white" 
+          placeholder="Search for chapters in this subject..."
+          v-model="chapterSearchTerm"
+        >
+      </div>
 
       <div class="content-card p-4">
         <table class="table table-dark table-hover">
@@ -28,6 +37,9 @@
             </tr>
           </thead>
           <tbody>
+            <tr v-if="!chapters.length">
+              <td colspan="3" class="text-center">No chapters found. Try a different search.</td>
+            </tr>
             <tr v-for="chapter in chapters" :key="chapter.id">
               <td>{{ chapter.name }}</td>
               <td>{{ chapter.description }}</td>
@@ -81,6 +93,7 @@ const selectedSubjectId = ref(null);
 const chapters = ref([]);
 const currentChapter = ref({ id: null, name: '', description: '' });
 const isEditMode = ref(false);
+const chapterSearchTerm = ref('');
 
 const fetchAllSubjects = async () => {
   try {
@@ -97,7 +110,9 @@ const fetchChaptersForSubject = async (subjectId) => {
     return;
   }
   try {
-    const response = await api.get(`/subjects/${subjectId}/chapters`);
+    const response = await api.get(`/subjects/${subjectId}/chapters`, {
+      params: { q: chapterSearchTerm.value }
+    });
     chapters.value = response.data;
   } catch (error) {
     console.error("Failed to fetch chapters:", error);
@@ -111,7 +126,12 @@ onMounted(() => {
 });
 
 watch(selectedSubjectId, (newId) => {
+  chapterSearchTerm.value = ''; // Reset search when subject changes
   fetchChaptersForSubject(newId);
+});
+
+watch(chapterSearchTerm, () => {
+  fetchChaptersForSubject(selectedSubjectId.value);
 });
 
 const selectedSubjectName = computed(() => {

@@ -38,7 +38,7 @@
 <script setup>
 import { ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
-import { jwtDecode } from 'jwt-decode';
+import jwtDecode from 'jwt-decode';
 import api from '../services/api';
 
 const router = useRouter();

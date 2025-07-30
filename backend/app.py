@@ -7,6 +7,8 @@ from config import Config
 from tasks import celery, generate_user_performance_report
 from flask import send_from_directory
 from app_factory import create_app
+from sqlalchemy import or_
+from sqlalchemy import func
 
 # --- App Initialization ---
 app = create_app()
@@ -36,12 +38,7 @@ def register():
     data = request.get_json()
     if User.query.filter_by(username=data.get('email')).first():
         return jsonify({"msg": "User with this email already exists"}), 409
-    
-    new_user = User(
-        username=data.get('email'), 
-        full_name=data.get('fullName'), 
-        qualification=data.get('qualification')
-    )
+    new_user = User(username=data.get('email'), full_name=data.get('fullName'), qualification=data.get('qualification'))
     new_user.set_password(data.get('password'))
     db.session.add(new_user)
     db.session.commit()
@@ -56,31 +53,63 @@ def login():
         return jsonify(access_token=access_token)
     return jsonify({"msg": "Bad username or password"}), 401
 
+
 @app.route('/api/admin/stats', methods=['GET'])
 @admin_required
 def get_admin_stats():
-    # Fetch the admin's name
     admin_user_id = get_jwt_identity()
     admin = User.query.get(admin_user_id)
     admin_name = admin.full_name if admin else "Admin"
-
-    # Calculate the counts
     total_subjects = Subject.query.count()
     total_quizzes = Quiz.query.count()
     total_users = User.query.filter(User.role != 'admin').count()
-    
+    return jsonify({"admin_name": admin_name, "total_subjects": total_subjects, "total_quizzes": total_quizzes, "total_users": total_users})
+
+
+# --- NEW: Global Search API for Admin ---
+@app.route('/api/admin/search', methods=['GET'])
+@admin_required
+def global_admin_search():
+    query_term = request.args.get('q', '').strip()
+    if len(query_term) < 2:
+        return jsonify({"subjects": [], "chapters": [], "users": []})
+    like_term = f'%{query_term}%'
+    subjects = Subject.query.filter(or_(Subject.name.ilike(like_term), Subject.description.ilike(like_term))).limit(5).all()
+    chapters = Chapter.query.join(Subject).filter(or_(Chapter.name.ilike(like_term), Chapter.description.ilike(like_term))).limit(5).all()
+    users = User.query.filter(User.role != 'admin', or_(User.full_name.ilike(like_term), User.username.ilike(like_term))).limit(5).all()
     return jsonify({
-        "admin_name": admin_name,
-        "total_subjects": total_subjects,
-        "total_quizzes": total_quizzes,
-        "total_users": total_users
+        "subjects": [{'id': s.id, 'name': s.name, 'description': s.description} for s in subjects],
+        "chapters": [{'id': c.id, 'name': c.name, 'subject_name': c.subject.name} for c in chapters],
+        "users": [{'id': u.id, 'full_name': u.full_name, 'username': u.username, 'role': u.role} for u in users]
     })
 
+@app.route('/api/admin/performance-overview', methods=['GET'])
+@admin_required
+def get_user_performance_overview():
+    questions_per_quiz = db.session.query(Quiz.id, func.count(Question.id).label('question_count')).join(Question).group_by(Quiz.id).subquery()
+    top_users_data = db.session.query(
+        User.full_name,
+        func.avg(Score.total_scored * 100.0 / questions_per_quiz.c.question_count),
+    ).join(Score, User.id == Score.user_id)\
+     .join(Quiz, Score.quiz_id == Quiz.id)\
+     .join(questions_per_quiz, Quiz.id == questions_per_quiz.c.id)\
+     .group_by(User.id)\
+     .order_by(func.avg(Score.total_scored * 100.0 / questions_per_quiz.c.question_count).desc())\
+     .limit(10).all()
+    labels = [user[0] for user in top_users_data]
+    avg_scores = [round(user[1], 2) if user[1] is not None else 0 for user in top_users_data]
+    return jsonify({'labels': labels, 'avg_scores': avg_scores})
+
 # --- Subject Management APIs ---
+# --- Subject Management APIs (No search param needed anymore) ---
 @app.route('/api/subjects', methods=['GET'])
 @admin_required
 def get_all_subjects():
-    subjects = Subject.query.order_by(Subject.name).all()
+    query_term = request.args.get('q', '')
+    query = Subject.query
+    if query_term:
+        query = query.filter(or_(Subject.name.ilike(f'%{query_term}%'), Subject.description.ilike(f'%{query_term}%')))
+    subjects = query.order_by(Subject.name).all()
     return jsonify([{'id': s.id, 'name': s.name, 'description': s.description} for s in subjects])
 
 @app.route('/api/subjects', methods=['POST'])
@@ -122,9 +151,13 @@ def get_chapter_details(chapter_id):
 @app.route('/api/subjects/<int:subject_id>/chapters', methods=['GET'])
 @admin_required
 def get_chapters_for_subject(subject_id):
-    subject = Subject.query.get_or_404(subject_id)
-    chapters = [{'id': c.id, 'name': c.name, 'description': c.description} for c in subject.chapters]
-    return jsonify(chapters)
+    query_term = request.args.get('q', '')
+    query = Chapter.query.filter_by(subject_id=subject_id)
+    if query_term:
+        query = query.filter(or_(Chapter.name.ilike(f'%{query_term}%'), Chapter.description.ilike(f'%{query_term}%')))
+    chapters = query.order_by(Chapter.name).all()
+    return jsonify([{'id': c.id, 'name': c.name, 'description': c.description} for c in chapters])
+
 
 @app.route('/api/subjects/<int:subject_id>/chapters', methods=['POST'])
 @admin_required
@@ -161,8 +194,14 @@ def delete_chapter(chapter_id):
 @admin_required
 def get_quizzes_for_chapter(chapter_id):
     Chapter.query.get_or_404(chapter_id)
-    quizzes = Quiz.query.filter_by(chapter_id=chapter_id).all()
+    search_term = request.args.get('q', '')
+    query = Quiz.query.filter_by(chapter_id=chapter_id)
+    if search_term:
+        # Search by remarks or quiz ID
+        query = query.filter(or_(Quiz.remarks.ilike(f'%{search_term}%'), Quiz.id.ilike(f'%{search_term}%')))
+    quizzes = query.all()
     return jsonify([{'id': q.id, 'time_duration': q.time_duration, 'remarks': q.remarks} for q in quizzes])
+
 
 @app.route('/api/chapters/<int:chapter_id>/quizzes', methods=['POST'])
 @admin_required
@@ -255,15 +294,14 @@ def delete_question(question_id):
 @app.route('/api/users', methods=['GET'])
 @admin_required
 def get_all_users():
-    # Fetch all users except the admin to prevent self-modification
-    users = User.query.filter(User.role != 'admin').order_by(User.full_name).all()
-    return jsonify([{
-        'id': u.id,
-        'full_name': u.full_name,
-        'username': u.username, # email
-        'qualification': u.qualification,
-        'role': u.role
-    } for u in users])
+    query_term = request.args.get('q', '')
+    query = User.query.filter(User.role != 'admin')
+    if query_term:
+        query = query.filter(or_(User.full_name.ilike(f'%{query_term}%'), User.username.ilike(f'%{query_term}%')))
+    users = query.order_by(User.full_name).all()
+    return jsonify([{'id': u.id, 'full_name': u.full_name, 'username': u.username, 'qualification': u.qualification, 'role': u.role} for u in users])
+
+
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
 @admin_required
@@ -324,14 +362,22 @@ def get_user_profile():
 @app.route('/api/quizzes', methods=['GET'])
 @jwt_required()
 def get_available_quizzes():
-    quizzes = Quiz.query.all()
-    return jsonify([{"id": q.id, "title": f"Quiz for Chapter {q.chapter_id}", "description": q.remarks} for q in quizzes])
+    query_term = request.args.get('q', '')
+    query = Quiz.query.join(Chapter).join(Subject)
+    if query_term:
+        query = query.filter(or_(Subject.name.ilike(f'%{query_term}%'), Chapter.name.ilike(f'%{query_term}%'), Quiz.remarks.ilike(f'%{query_term}%')))
+    quizzes = query.all()
+    return jsonify([{"id": q.id, "title": f"{q.chapter.subject.name} - {q.chapter.name}", "description": q.remarks or f"{len(q.questions)} questions"} for q in quizzes])
+
+
 
 @app.route('/api/user/scores', methods=['GET'])
 @jwt_required()
 def get_user_scores():
     user_id = get_jwt_identity()
     scores = Score.query.filter_by(user_id=user_id).all()
+    # Search for scores is implemented on the frontend for simplicity,
+    # as a user's score list is not expected to be excessively long.
     return jsonify([{"id": s.id, "quizName": f"Quiz #{s.quiz_id}", "score": s.total_scored, "date": s.time_stamp.strftime('%Y-%m-%d')} for s in scores])
 
 # --- Quiz Taking APIs ---
@@ -392,6 +438,23 @@ def submit_quiz_attempt(quiz_id):
         'score': score,
         'total': total_questions
     })
+
+@app.route('/api/admin/performance-overview', methods=['GET'])
+@admin_required
+def get_performance_overview():
+    questions_per_quiz = db.session.query(Quiz.id, func.count(Question.id).label('question_count')).join(Question).group_by(Quiz.id).subquery()
+    top_users_data = db.session.query(
+        User.full_name,
+        func.avg(Score.total_scored * 100.0 / questions_per_quiz.c.question_count),
+    ).join(Score, User.id == Score.user_id)\
+     .join(Quiz, Score.quiz_id == Quiz.id)\
+     .join(questions_per_quiz, Quiz.id == questions_per_quiz.c.id)\
+     .group_by(User.id)\
+     .order_by(func.avg(Score.total_scored * 100.0 / questions_per_quiz.c.question_count).desc())\
+     .limit(10).all()
+    labels = [user[0] for user in top_users_data]
+    avg_scores = [round(user[1], 2) if user[1] is not None else 0 for user in top_users_data]
+    return jsonify({'labels': labels, 'avg_scores': avg_scores})
 
 # --- App Runner ---
 if __name__ == '__main__':

@@ -29,8 +29,18 @@
         <button class="btn btn-primary" @click="openCreateModal">Create New Quiz</button>
       </div>
 
+      <div class="mb-4">
+        <input 
+          type="search" 
+          class="form-control form-control-lg bg-dark text-white" 
+          placeholder="Search quizzes by ID or remarks..."
+          v-model="searchTerm"
+        >
+      </div>
+
       <div class="content-card p-4">
-        <p v-if="!quizzes.length">No quizzes have been created for this chapter yet.</p>
+        <p v-if="!quizzes.length && !searchTerm">No quizzes have been created for this chapter yet.</p>
+        <p v-if="!quizzes.length && searchTerm">No quizzes found matching your search.</p>
         <table v-else class="table table-dark table-hover">
           <thead>
             <tr>
@@ -96,6 +106,7 @@ let quizModal = null;
 const allSubjects = ref([]);
 const chaptersForSelectedSubject = ref([]);
 const quizzes = ref([]);
+const searchTerm = ref('');
 
 const selectedSubjectId = ref(null);
 const selectedChapterId = ref(null);
@@ -110,6 +121,22 @@ const fetchAllSubjects = async () => {
   } catch (error) { console.error("Failed to fetch subjects:", error); }
 };
 
+const fetchQuizzesForChapter = async (chapterId) => {
+  if (!chapterId) {
+    quizzes.value = [];
+    return;
+  }
+  try {
+    const response = await api.get(`/chapters/${chapterId}/quizzes`, {
+      params: { q: searchTerm.value }
+    });
+    quizzes.value = response.data;
+  } catch (error) { 
+    console.error("Failed to fetch quizzes:", error); 
+    quizzes.value = [];
+  }
+};
+
 onMounted(() => {
   fetchAllSubjects();
   quizModal = new Modal(document.getElementById('quizModal'));
@@ -119,6 +146,7 @@ watch(selectedSubjectId, async (newSubjectId) => {
   chaptersForSelectedSubject.value = [];
   quizzes.value = [];
   selectedChapterId.value = null;
+  searchTerm.value = ''; // Reset search
   if (newSubjectId) {
     try {
       const response = await api.get(`/subjects/${newSubjectId}/chapters`);
@@ -127,14 +155,13 @@ watch(selectedSubjectId, async (newSubjectId) => {
   }
 });
 
-watch(selectedChapterId, async (newChapterId) => {
-  quizzes.value = [];
-  if (newChapterId) {
-    try {
-      const response = await api.get(`/chapters/${newChapterId}/quizzes`);
-      quizzes.value = response.data;
-    } catch (error) { console.error("Failed to fetch quizzes:", error); }
-  }
+watch(selectedChapterId, (newChapterId) => {
+  searchTerm.value = ''; // Reset search
+  fetchQuizzesForChapter(newChapterId);
+});
+
+watch(searchTerm, () => {
+  fetchQuizzesForChapter(selectedChapterId.value);
 });
 
 const selectedChapterName = computed(() => {
@@ -152,8 +179,7 @@ const createQuiz = async () => {
   try {
     await api.post(`/chapters/${selectedChapterId.value}/quizzes`, currentQuiz.value);
     quizModal.hide();
-    const response = await api.get(`/chapters/${selectedChapterId.value}/quizzes`);
-    quizzes.value = response.data;
+    fetchQuizzesForChapter(selectedChapterId.value);
   } catch (error) { console.error("Failed to create quiz:", error); }
 };
 
@@ -167,8 +193,7 @@ const updateQuiz = async () => {
   try {
     await api.put(`/quizzes/${currentQuiz.value.id}`, currentQuiz.value);
     quizModal.hide();
-    const response = await api.get(`/chapters/${selectedChapterId.value}/quizzes`);
-    quizzes.value = response.data;
+    fetchQuizzesForChapter(selectedChapterId.value);
   } catch (error) { console.error("Failed to update quiz:", error); }
 };
 
@@ -176,8 +201,7 @@ const deleteQuiz = async (id) => {
   if (!confirm("Are you sure you want to delete this quiz?")) return;
   try {
     await api.delete(`/quizzes/${id}`);
-    const response = await api.get(`/chapters/${selectedChapterId.value}/quizzes`);
-    quizzes.value = response.data;
+    fetchQuizzesForChapter(selectedChapterId.value);
   } catch (error) { console.error("Failed to delete quiz:", error); }
 };
 </script>

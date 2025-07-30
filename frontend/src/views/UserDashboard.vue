@@ -8,15 +8,25 @@
     </nav>
 
     <div class="main-content container p-4">
-      <h1 class="text-white mb-4">Welcome, {{ userName }}!</h1>
+      <h1 class="text-white">Welcome, {{ userName }}!</h1>
+      <p class="text-white-50 mb-4">You can search for available quizzes or past scores below.</p>
+
+      <div class="mb-4">
+        <input 
+          type="search" 
+          class="form-control form-control-lg bg-dark text-white" 
+          placeholder="Search quizzes or scores..."
+          v-model="searchTerm"
+        >
+      </div>
 
       <div class="row">
         <div class="col-lg-7 mb-4">
           <div class="content-card p-4">
             <h4 class="mb-3">Available Quizzes</h4>
-            <p v-if="!availableQuizzes.length">No quizzes available at the moment.</p>
+            <p v-if="!filteredQuizzes.length">No quizzes found matching your search.</p>
             <ul v-else class="list-group">
-              <li v-for="quiz in availableQuizzes" :key="quiz.id" class="list-group-item d-flex justify-content-between align-items-center">
+              <li v-for="quiz in filteredQuizzes" :key="quiz.id" class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
                   <h6 class="mb-1">{{ quiz.title }}</h6>
                   <small class="text-muted">{{ quiz.description }}</small>
@@ -30,7 +40,7 @@
         <div class="col-lg-5">
           <div class="content-card p-4">
             <h4 class="mb-3">My Past Scores</h4>
-            <p v-if="!pastScores.length">You haven't completed any quizzes yet.</p>
+            <p v-if="!filteredScores.length">No scores found matching your search.</p>
             <table v-else class="table table-dark table-hover">
               <thead>
                 <tr>
@@ -40,7 +50,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="score in pastScores" :key="score.id">
+                <tr v-for="score in filteredScores" :key="score.id">
                   <td>{{ score.quizName }}</td>
                   <td>{{ score.score }}</td>
                   <td>{{ score.date }}</td>
@@ -51,30 +61,71 @@
         </div>
       </div>
     </div>
+    <div class="row">
+      <div class="col-lg-7 mb-4">
+        </div>
+      <div class="col-lg-5 mb-4">
+        </div>
+    </div>
+    <div class="row">
+      <div class="col-12">
+        <div class="content-card p-4">
+          <h4 class="mb-3">My Performance</h4>
+          <div style="height: 300px">
+            <PerformanceChart v-if="chartData.labels.length" :chart-data="chartData" />
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../services/api';
+import PerformanceChart from '@/components/PerformanceChart.vue'; // Import the chart
 
 const router = useRouter();
 
+// State
 const userName = ref('');
 const availableQuizzes = ref([]);
 const pastScores = ref([]);
+const searchTerm = ref(''); // Single search term
+const chartData = ref({ labels: [], datasets: [] }); // State for chart data
 
 const handleLogout = () => {
   localStorage.removeItem('accessToken');
   router.push('/login');
 };
 
+const fetchScores = async () => {
+  try {
+    const response = await api.get('/user/scores');
+    pastScores.value = response.data;
+
+    // Prepare data for the chart (e.g., last 5 quizzes)
+    const recentScores = response.data.slice(0, 5).reverse();
+    chartData.value = {
+      labels: recentScores.map(s => s.quizName),
+      datasets: [
+        {
+          label: 'Score (%)',
+          backgroundColor: '#ff4d6d',
+          data: recentScores.map(s => s.score)
+        }
+      ]
+    };
+  } catch (error) { console.error("Failed to fetch scores:", error); }
+};
+
+// Fetch all data on component mount
 onMounted(async () => {
   try {
     const [profileRes, quizzesRes, scoresRes] = await Promise.all([
       api.get('/user/profile'),
-      api.get('/quizzes'),
+      api.get('/quizzes'), // Fetches all quizzes
       api.get('/user/scores'),
     ]);
 
@@ -85,6 +136,35 @@ onMounted(async () => {
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);
   }
+});
+
+// --- Computed Properties for Filtering ---
+
+// Filter available quizzes based on the single search term
+const filteredQuizzes = computed(() => {
+  if (!searchTerm.value) {
+    return availableQuizzes.value;
+  }
+  const lowerCaseSearch = searchTerm.value.toLowerCase();
+  return availableQuizzes.value.filter(quiz => {
+    const titleMatch = quiz.title.toLowerCase().includes(lowerCaseSearch);
+    const descriptionMatch = quiz.description.toLowerCase().includes(lowerCaseSearch);
+    return titleMatch || descriptionMatch;
+  });
+});
+
+// Filter past scores based on the single search term
+const filteredScores = computed(() => {
+  if (!searchTerm.value) {
+    return pastScores.value;
+  }
+  const lowerCaseSearch = searchTerm.value.toLowerCase();
+  return pastScores.value.filter(score => {
+    return (
+      score.quizName.toLowerCase().includes(lowerCaseSearch) ||
+      score.score.toString().includes(lowerCaseSearch)
+    );
+  });
 });
 </script>
 
@@ -98,7 +178,7 @@ onMounted(async () => {
   backdrop-filter: blur(5px);
 }
 .main-content {
-  padding-top: 80px;
+  padding-top: 2rem; /* Adjusted padding */
 }
 .content-card {
   color: white;
@@ -116,5 +196,19 @@ onMounted(async () => {
 .btn-primary {
   background-color: #ff4d6d;
   border-color: #ff4d6d;
+}
+.form-control {
+  background-color: rgba(0,0,0,0.2);
+  color: white;
+  border-color: rgba(255,255,255,0.2);
+}
+.form-control:focus {
+  color: white;
+  background-color: rgba(0,0,0,0.3);
+  border-color: #ff4d6d;
+  box-shadow: none;
+}
+.form-control::placeholder {
+  color: rgba(255,255,255,0.4);
 }
 </style>

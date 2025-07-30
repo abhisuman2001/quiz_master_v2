@@ -5,6 +5,15 @@
       <button class="btn btn-primary" @click="openCreateModal">Create New Subject</button>
     </div>
 
+    <div class="mb-4">
+      <input 
+        type="search" 
+        class="form-control form-control-lg bg-dark text-white" 
+        placeholder="Search for subjects by name..."
+        v-model="searchTerm"
+      >
+    </div>
+
     <div class="content-card p-4">
       <table class="table table-dark table-hover">
         <thead>
@@ -15,6 +24,9 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="!subjects.length">
+            <td colspan="3" class="text-center">No subjects found.</td>
+          </tr>
           <tr v-for="subject in subjects" :key="subject.id">
             <td>{{ subject.name }}</td>
             <td>{{ subject.description }}</td>
@@ -57,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import api from '../../services/api';
 import { Modal } from 'bootstrap';
 
@@ -66,10 +78,13 @@ let subjectModal = null;
 const subjects = ref([]);
 const currentSubject = ref({ id: null, name: '', description: '' });
 const isEditMode = ref(false);
+const searchTerm = ref('');
 
 const fetchSubjects = async () => {
   try {
-    const response = await api.get('/subjects');
+    const response = await api.get('/subjects', {
+      params: { q: searchTerm.value }
+    });
     subjects.value = response.data;
   } catch (error) {
     console.error("Failed to fetch subjects:", error);
@@ -81,6 +96,9 @@ onMounted(() => {
   fetchSubjects();
   subjectModal = new Modal(document.getElementById('subjectModal'));
 });
+
+// Watch for changes in searchTerm and refetch subjects
+watch(searchTerm, fetchSubjects);
 
 const openCreateModal = () => {
   isEditMode.value = false;

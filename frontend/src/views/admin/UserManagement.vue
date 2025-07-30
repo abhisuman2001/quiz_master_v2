@@ -14,6 +14,9 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="!users.length">
+            <td colspan="5" class="text-center">No users found.</td>
+          </tr>
           <tr v-for="user in users" :key="user.id">
             <td>{{ user.full_name }}</td>
             <td>{{ user.username }}</td>
@@ -79,6 +82,7 @@ const currentUser = ref({ id: null, full_name: '', username: '', qualification: 
 
 const fetchUsers = async () => {
   try {
+    // The API call no longer sends a search parameter
     const response = await api.get('/users');
     users.value = response.data;
   } catch (error) { console.error("Failed to fetch users:", error); }
@@ -88,6 +92,8 @@ onMounted(() => {
   fetchUsers();
   userModal = new Modal(document.getElementById('userModal'));
 });
+
+// Watcher for search term is REMOVED
 
 const openEditModal = (user) => {
   currentUser.value = { ...user };
@@ -118,7 +124,6 @@ const deleteUser = async (id) => {
 </script>
 
 <style scoped>
-/* These styles are identical to previous management pages */
 .content-card { background: rgba(255, 255, 255, 0.1); border-radius: 16px; backdrop-filter: blur(5px); }
 .modal-content { background: #343a40; }
 .form-control, .form-select { background-color: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.2); }

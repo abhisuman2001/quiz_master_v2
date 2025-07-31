@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Master - Monthly Activity Report</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .stats {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Monthly Activity Report - {{ month }}</h2>
+    <p>Hello {{ user_name }},</p>
+    
+    <div class="stats">
+        <h3>Monthly Statistics</h3>
+        <p>Total Quizzes Attempted: {{ total_quizzes }}</p>
+        <p>Average Score: {{ avg_score }}%</p>
+        <p>Your Rank: {{ rank }}</p>
+    </div>
+
+    {% if scores %}
+    <h3>Quiz Attempts</h3>
+    <table>
+        <tr>
+            <th>Date</th>
+            <th>Quiz</th>
+            <th>Score</th>
+        </tr>
+        {% for score in scores %}
+        <tr>
+            <td>{{ score.time_stamp.strftime('%Y-%m-%d') }}</td>
+            <td>{{ score.quiz.chapter.subject.name }} - {{ score.quiz.chapter.name }}</td>
+            <td>{{ score.total_scored }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    <p>Keep up the great work!</p>
+    
+    <p>Best regards,<br>Quiz Master Team</p>
+</body>
+</html>

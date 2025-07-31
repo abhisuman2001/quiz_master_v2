@@ -357,7 +357,41 @@ def download_report(filename):
 def get_user_profile():
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
-    return jsonify({"fullName": user.full_name})
+    return jsonify({
+        "fullName": user.full_name,
+        "notifications_enabled": user.notifications_enabled,
+        "email_notifications": user.email_notifications,
+        "gchat_webhook": user.gchat_webhook,
+        "notification_time": user.notification_time.strftime('%H:%M') if user.notification_time else None
+    })
+
+@app.route('/api/user/notifications', methods=['PUT'])
+@jwt_required()
+def update_notification_preferences():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    data = request.get_json()
+    
+    if 'notifications_enabled' in data:
+        user.notifications_enabled = data['notifications_enabled']
+    if 'email_notifications' in data:
+        user.email_notifications = data['email_notifications']
+    if 'gchat_webhook' in data:
+        user.gchat_webhook = data['gchat_webhook']
+    if 'notification_time' in data:
+        try:
+            hour, minute = map(int, data['notification_time'].split(':'))
+            user.notification_time = datetime.time(hour, minute)
+        except (ValueError, AttributeError):
+            return jsonify({"msg": "Invalid time format. Use HH:MM"}), 400
+    
+    db.session.commit()
+    return jsonify({
+        "notifications_enabled": user.notifications_enabled,
+        "email_notifications": user.email_notifications,
+        "gchat_webhook": user.gchat_webhook,
+        "notification_time": user.notification_time.strftime('%H:%M') if user.notification_time else None
+    })
 
 @app.route('/api/quizzes', methods=['GET'])
 @jwt_required()

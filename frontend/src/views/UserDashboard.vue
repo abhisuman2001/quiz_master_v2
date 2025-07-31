@@ -100,26 +100,6 @@ const handleLogout = () => {
   router.push('/login');
 };
 
-const fetchScores = async () => {
-  try {
-    const response = await api.get('/user/scores');
-    pastScores.value = response.data;
-
-    // Prepare data for the chart (e.g., last 5 quizzes)
-    const recentScores = response.data.slice(0, 5).reverse();
-    chartData.value = {
-      labels: recentScores.map(s => s.quizName),
-      datasets: [
-        {
-          label: 'Score (%)',
-          backgroundColor: '#ff4d6d',
-          data: recentScores.map(s => s.score)
-        }
-      ]
-    };
-  } catch (error) { console.error("Failed to fetch scores:", error); }
-};
-
 // Fetch all data on component mount
 onMounted(async () => {
   try {
@@ -132,6 +112,19 @@ onMounted(async () => {
     userName.value = profileRes.data.fullName;
     availableQuizzes.value = quizzesRes.data;
     pastScores.value = scoresRes.data;
+
+    // Prepare data for the chart (last 5 quizzes)
+    const recentScores = scoresRes.data.slice(0, 5).reverse();
+    chartData.value = {
+      labels: recentScores.map(s => s.quizName),
+      datasets: [
+        {
+          label: 'Score (%)',
+          backgroundColor: '#ff4d6d',
+          data: recentScores.map(s => s.score)
+        }
+      ]
+    };
 
   } catch (error) {
     console.error("Failed to fetch dashboard data:", error);

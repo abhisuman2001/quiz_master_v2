@@ -1,6 +1,7 @@
 # backend/models.py
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, time
 
 db = SQLAlchemy()
 
@@ -13,6 +14,12 @@ class User(db.Model):
     dob = db.Column(db.Date)
     role = db.Column(db.String(10), nullable=False, default='user') # 'admin' or 'user'
     scores = db.relationship('Score', backref='user', lazy=True, cascade="all, delete-orphan")
+    
+    # Notification preferences
+    notifications_enabled = db.Column(db.Boolean, default=True)
+    email_notifications = db.Column(db.Boolean, default=True)
+    gchat_webhook = db.Column(db.String(255))  # For Google Chat notifications
+    notification_time = db.Column(db.Time, default=lambda: time(20, 10))  # Default 8:10 PM
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -38,6 +45,7 @@ class Quiz(db.Model):
     chapter_id = db.Column(db.Integer, db.ForeignKey('chapter.id'), nullable=False)
     time_duration = db.Column(db.String(5), nullable=False) # "HH:MM"
     remarks = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
     questions = db.relationship('Question', backref='quiz', lazy=True, cascade="all, delete-orphan")
     scores = db.relationship('Score', backref='quiz', lazy=True, cascade="all, delete-orphan")
 

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quiz Master - Daily Reminder</title>
+</head>
+<body>
+    <h2>Hello {{ user_name }}!</h2>
+    
+    {% if new_quizzes %}
+    <h3>New quizzes are available:</h3>
+    <ul>
+    {% for quiz in new_quizzes %}
+        <li>{{ quiz.chapter.subject.name }} - {{ quiz.chapter.name }}</li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+    
+    <p>Don't forget to practice and improve your skills!</p>
+    
+    <p>Best regards,<br>Quiz Master Team</p>
+</body>
+</html>

@@ -1,4 +1,3 @@
-.vercel
 # Python
 backend/venv/
 __pycache__/
@@ -6,5 +5,3 @@ __pycache__/
 
 # Node
 node_modules/
-dist/
-.env

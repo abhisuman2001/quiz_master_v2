@@ -52,6 +52,13 @@
                     <input type="text" class="form-control" :placeholder="`Option ${i}`" v-model="currentQuestion['option' + i]" required>
                   </div>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+
 
     <h1 class="text-white mb-4">Manage Quizzes</h1>
 

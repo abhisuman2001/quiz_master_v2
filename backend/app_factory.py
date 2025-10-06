@@ -7,6 +7,10 @@ from flask_migrate import Migrate
 from tasks import celery
 from notifications import mail
 
+
+from scheduler import init_scheduler
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -26,7 +30,10 @@ def create_app():
     # Initialize Flask-Mail
     mail.init_app(app)
     
-   
+
+    # Initialize scheduler
+    init_scheduler(app)
+
     
     return app
     return app

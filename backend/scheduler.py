@@ -25,4 +25,8 @@ def init_scheduler(app):
             replace_existing=True
         )
         
+
        
+
+        scheduler.start()
+
